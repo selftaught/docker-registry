@@ -1,0 +1,160 @@
+# Core registry settings
+platform:
+  image:
+    repository: registry
+    tag: "2.8.3"
+    pullPolicy: IfNotPresent
+  
+  instances: 1
+
+  
+  configuration:
+    logLevel: info
+    deleteOperations: true
+    storageDriver: filesystem
+    maxConnections: 100
+    readTimeout: "60s"
+    writeTimeout: "60s"
+
+# Data persistence
+persistence:
+  enabled: true
+  capacity: 50Gi
+  storageClassName: ""
+  accessModes: 
+    - ReadWriteOnce
+  mountPath: /registry-data
+  
+  # Backup configuration
+  backup:
+    enabled: false
+    schedule: "0 2 * * *"
+    retention: 7
+
+# Security and access
+security:
+  authentication:
+    enabled: true
+    provider: htpasswd
+    credentials:
+      username: registryuser
+      password: securepass456
+    existingSecret: ""
+  
+  certificates:
+    autoGenerate: true
+    domain: registry.local
+    alternativeNames: []
+    existingTlsSecret: ""
+    issuer: selfsigned
+
+# Network exposure
+networking:
+  service:
+    type: ClusterIP
+    port: 5000
+    containerPort: 5000
+
+  loadBalancerIP: ""
+  ingress:
+    enabled: true
+    className: ""
+    hosts:
+      - host: registry.dillan.io
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      enabled: true
+      secretName: ""
+  # gateway:
+  #   enabled: true
+  #   ingressClass: nginx
+  #   hostname: registry.dillan.io
+  #   pathRule: Prefix
+  #   customAnnotations:
+  #     nginx.ingress.kubernetes.io/proxy-body-size: unlimited
+  #     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  #     nginx.ingress.kubernetes.io/client-max-body-size: unlimited
+
+
+# # Management interface
+# interface:
+#   enabled: true
+#   component:
+#     image: joxit/docker-registry-ui
+#     tag: "2.5.7"
+  
+#   features:
+#     title: "Container Registry Platform"
+#     deleteSupport: true
+#     catalogView: true
+#     tagLimit: 50
+#     digestDisplay: true
+  
+#   networking:
+#     serviceType: ClusterIP
+#     gateway:
+#       enabled: true
+#       hostname: registry-ui.dillan.io
+#       ingressClass: nginx
+
+# Resource allocation
+resourceManagement:
+  registry:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+  
+  interface:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m
+
+# Health monitoring
+monitoring:
+  registry:
+    livenessProbe:
+      enabled: true
+      path: /v2/
+      initialDelaySeconds: 45
+      periodSeconds: 15
+      timeoutSeconds: 10
+    
+    readinessProbe:
+      enabled: true
+      path: /v2/
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+
+# Pod configuration
+podConfiguration:
+  securityContext:
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    runAsNonRoot: true
+  
+  containerSecurity:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  
+  nodeAffinity: {}
+  podAffinity: {}
+  tolerations: []
+
+# Service account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: false

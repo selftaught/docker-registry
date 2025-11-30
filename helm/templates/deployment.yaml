@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docker-registry.name" . }}
+  labels:
+    {{- include "docker-registry.labels" . | nindent 4 }}
+    app.kubernetes.io/component: registry-core
+spec:
+  replicas: {{ .Values.platform.instances }}
+  selector:
+    matchLabels:
+      {{- include "docker-registry.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: registry-core
+  template:
+    metadata:
+      labels:
+        {{- include "docker-registry.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: registry-core
+    spec:
+      serviceAccountName: {{ include "docker-registry.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podConfiguration.securityContext | nindent 8 }}
+      containers:
+      - name: registry-engine
+        image: {{ include "docker-registry.registryImage" . }}
+        imagePullPolicy: {{ .Values.platform.image.pullPolicy }}
+        ports:
+        - name: registry-port
+          containerPort: {{ .Values.networking.service.containerPort }}
+          protocol: TCP
+        env:
+        - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
+          value: {{ .Values.persistence.mountPath }}
+        - name: REGISTRY_HTTP_ADDR
+          value: "0.0.0.0:{{ .Values.networking.service.port }}"
+        {{- if .Values.security.authentication.enabled }}
+        - name: REGISTRY_AUTH
+          value: htpasswd
+        - name: REGISTRY_AUTH_HTPASSWD_REALM
+          value: "Registry Authentication"
+        - name: REGISTRY_AUTH_HTPASSWD_PATH
+          value: /auth/htpasswd
+        {{- end }}
+        {{- if .Values.security.certificates.autoGenerate }}
+        - name: REGISTRY_HTTP_TLS_CERTIFICATE
+          value: /certs/tls.crt
+        - name: REGISTRY_HTTP_TLS_KEY
+          value: /certs/tls.key
+        {{- end }}
+        volumeMounts:
+        - name: registry-storage
+          mountPath: {{ .Values.persistence.mountPath }}
+        {{- if .Values.security.authentication.enabled }}
+        - name: auth-config
+          mountPath: /auth
+          readOnly: true
+        {{- end }}
+        {{- if .Values.security.certificates.autoGenerate }}
+        - name: tls-certs
+          mountPath: /certs
+          readOnly: true
+        {{- end }}
+        securityContext:
+          {{- toYaml .Values.podConfiguration.containerSecurity | nindent 10 }}
+        resources:
+          {{- toYaml .Values.resourceManagement.registry | nindent 10 }}
+        {{- if .Values.monitoring.registry.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.monitoring.registry.livenessProbe.path }}
+            port: registry-port
+            {{- if .Values.security.certificates.autoGenerate }}
+            scheme: HTTPS
+            {{- end }}
+          initialDelaySeconds: {{ .Values.monitoring.registry.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.monitoring.registry.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.monitoring.registry.livenessProbe.timeoutSeconds }}
+        {{- end }}
+        {{- if .Values.monitoring.registry.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.monitoring.registry.readinessProbe.path }}
+            port: registry-port
+            {{- if .Values.security.certificates.autoGenerate }}
+            scheme: HTTPS
+            {{- end }}
+          initialDelaySeconds: {{ .Values.monitoring.registry.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.monitoring.registry.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.monitoring.registry.readinessProbe.timeoutSeconds }}
+        {{- end }}
+      volumes:
+      - name: registry-storage
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "docker-registry.name" . }}-storage
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- if .Values.security.authentication.enabled }}
+      - name: auth-config
+        secret:
+          secretName: {{ include "docker-registry.name" . }}-auth
+      {{- end }}
+      {{- if .Values.security.certificates.autoGenerate }}
+      - name: tls-certs
+        secret:
+          secretName: {{ include "docker-registry.name" . }}-tls
+      {{- end }}

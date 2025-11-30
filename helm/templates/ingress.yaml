@@ -1,0 +1,34 @@
+{{- if .Values.networking.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "docker-registry.name" . }}
+  labels:
+    {{- include "docker-registry.labels" . | nindent 4 }}
+  {{- with .Values.networking.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.networking.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+
+  rules:
+    {{- range .Values.networking.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- with .pathType }}
+            pathType: {{ . }}
+            {{- end }}
+            backend:
+              service:
+                name: {{ include "docker-registry.name" $ }}
+                port:
+                  number: {{ $.Values.networking.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
